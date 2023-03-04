@@ -1,78 +1,103 @@
+
+/********Sample Code in Python*********/
+
+from multiprocessing import Process
 import os
-import random
+import socket
+from _thread import *
+import threading
 import time
+from threading import Thread
+import random
+ 
 
-PROCESSER_SPEED = [1, 5, 10]
-NUM_PROCESSERS = len(PROCESSER_SPEED)
-INTERNAL_CLOCK = [0] * NUM_PROCESSERS
-MESSAGE_QUEUE = [[]] * NUM_PROCESSERS
-DURATION = 10
+def consumer(conn):
+print("consumer accepted connection" + str(conn)+"\n")
+msg_queue=[]
+sleepVal = 0.900
+while True:
+time.sleep(sleepVal)
+data = conn.recv(1024)
+print("msg received\n")
+dataVal = data.decode('ascii')
+print("msg received:", dataVal)
+msg_queue.append(dataVal)
+ 
 
+def producer(portVal):
+host= "127.0.0.1"
+port = int(portVal)
+s = socket.socket(socket.AF_INET,socket.SOCK_STREAM)
+sleepVal = 0.500
+#sema acquire
+try:
+s.connect((host,port))
+print("Client-side connection success to port val:" + str(portVal) + "\n")
+ 
 
-def get_action():
-    
-    # Generate random int between 1 and 10 inclusive
-    action = random.randint(1, 10)
-    return action
+while True:
+codeVal = str(code)
+time.sleep(sleepVal)
+s.send(codeVal.encode('ascii'))
+print("msg sent", codeVal)
+ 
 
+except socket.error as e:
+print ("Error connecting producer: %s" % e)
+ 
 
+def init_machine(config):
+HOST = str(config[0])
+PORT = int(config[1])
+print("starting server| port val:", PORT)
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind((HOST, PORT))
+s.listen()
+while True:
+conn, addr = s.accept()
+start_new_thread(consumer, (conn,))
+ 
 
-def execute(processer_id):
-    
+def machine(config):
+config.append(os.getpid())
+global code
+#print(config)
+init_thread = Thread(target=init_machine, args=(config,))
+init_thread.start()
+#add delay to initialize the server-side logic on all processes
+time.sleep(5)
+# extensible to multiple producers
+prod_thread = Thread(target=producer, args=(config[2],))
+prod_thread.start()
+ 
 
-    if len(MESSAGE_QUEUE[processer_id]) > 0:
-        _, _, new_clock = MESSAGE_QUEUE[processer_id].pop(0)
-        INTERNAL_CLOCK[processer_id] += 1
-
-        INTERNAL_CLOCK[processer_id] = max(INTERNAL_CLOCK[processer_id], new_clock)
-        write_to_log(processer_id, "Received message at local time {}, queue length {}".format(INTERNAL_CLOCK[processer_id], len(MESSAGE_QUEUE[processer_id])))
-    else:
-        action = get_action()
-
-        
-        if action == 1:
-            MESSAGE_QUEUE[(processer_id+1)%3].append(("send", processer_id, INTERNAL_CLOCK[processer_id]))
-            INTERNAL_CLOCK[processer_id] += 1
-            write_to_log(processer_id, "Sent message {} at local time {}".format(action, INTERNAL_CLOCK[processer_id]))
-        elif action == 2:
-            MESSAGE_QUEUE[(processer_id+2)%3].append(("send", processer_id, INTERNAL_CLOCK[processer_id]))
-            INTERNAL_CLOCK[processer_id] += 1
-            write_to_log(processer_id, "Sent message {} at local time {}".format(action, INTERNAL_CLOCK[processer_id]))
-        elif action == 3:    
-            MESSAGE_QUEUE[(processer_id+1)%3].append(("send", processer_id, INTERNAL_CLOCK[processer_id]))
-            MESSAGE_QUEUE[(processer_id+2)%3].append(("send", processer_id, INTERNAL_CLOCK[processer_id]))
-            INTERNAL_CLOCK[processer_id] += 1
-            write_to_log(processer_id, "Sent double message {} at local time {}".format(action, INTERNAL_CLOCK[processer_id]))
-        else:
-            INTERNAL_CLOCK[processer_id] += 1
-            write_to_log(processer_id, "Internal action at local time {}".format(INTERNAL_CLOCK[processer_id]))
-
-def write_to_log(processer_id, message):
-    with open("logs/{}.txt".format(processer_id), "a") as f:
-        f.write(message + " " + str(time.time()) + "\n")
-
-def run():
-    # Processer speed is how often a processer will check for new instructions
-
-    # Delete all log files
-    if not os.path.exists("logs"):
-        os.mkdir("logs")
-    else:
-        for f in os.listdir("logs"):
-            os.remove(os.path.join("logs", f))
-        
-
-    real_timestamp = 0
-    print("Running for {} seconds".format(DURATION))
-    end = time.time() + DURATION
-    while time.time() < end:
-        real_timestamp += 1
-        for i, processer_speed in enumerate(PROCESSER_SPEED):
-            for _ in range(processer_speed):
-                execute(i)
+while True:
+code = random.randint(1,3)
 
 
+
+localHost= "127.0.0.1"
+ 
 
 if __name__ == '__main__':
-    run()
-    
+port1 = 2056
+port2 = 3056
+port3 = 4056
+ 
+
+config1=[localHost, port1, port2,]
+p1 = Process(target=machine, args=(config1,))
+config2=[localHost, port2, port3]
+p2 = Process(target=machine, args=(config2,))
+config3=[localHost, port3, port1]
+p3 = Process(target=machine, args=(config3,))
+ 
+
+p1.start()
+p2.start()
+p3.start()
+ 
+
+p1.join()
+p2.join()
+p3.join()
